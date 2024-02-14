@@ -46,35 +46,24 @@ class MainActivity : ComponentActivity() {
         Log.i("ble demo", text)
     }
 
+    // system service and its kin
     private val btManager: BluetoothManager by lazy {
         ContextCompat.getSystemService(
             this.applicationContext,
             BluetoothManager::class.java
         )!!
     }
-
     private val btAdapter: BluetoothAdapter by lazy {
         btManager.adapter
     }
-
     private val bleAdvertiser by lazy {
         btAdapter.bluetoothLeAdvertiser
     }
 
-    private val advertiseSettings = AdvertiseSettings.Builder()
-        .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
-        .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
-        .setConnectable(true)
-        .build()
-
-    private val advertiseData = AdvertiseData.Builder()
-        .setIncludeDeviceName(false) // very limited data size, don't include anything you don't have to
-        .addServiceUuid(ParcelUuid(UUID.fromString(SERVICE_UUID)))
-        .build()
-
+    // setter for the status label on the activity
     private var setStatus: (String) -> Unit = { }
 
-    // setup layout
+    // setup layout and gather status setter
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
@@ -160,7 +149,7 @@ class MainActivity : ComponentActivity() {
         return tankControllerGattService;
     }
 
-
+    //advertising methods
     private val advertiseCallback = object : AdvertiseCallback() {
         override fun onStartSuccess(settingsInEffect: AdvertiseSettings?) {
             setStatus("Advertising")
@@ -171,12 +160,20 @@ class MainActivity : ComponentActivity() {
             log("Error starting to advertise: $errorCode")
         }
     }
-
+    //settings for advertising
+    private val advertiseSettings = AdvertiseSettings.Builder()
+//        .setAdvertiseMode(AdvertiseSettings.ADVERTISE_MODE_BALANCED)
+//        .setTxPowerLevel(AdvertiseSettings.ADVERTISE_TX_POWER_MEDIUM)
+        .setConnectable(true)
+        .build()
+    private val advertiseData = AdvertiseData.Builder()
+        .setIncludeDeviceName(false) // very limited data size, don't include anything you don't have to
+        .addServiceUuid(ParcelUuid(UUID.fromString(SERVICE_UUID)))
+        .build()
     private fun bleStartAdvertising() {
         bleStartGattServer()
         bleAdvertiser.startAdvertising(advertiseSettings, advertiseData, advertiseCallback)
     }
-
     private fun bleStopAdvertising() {
         bleStopGattServer()
         bleAdvertiser.stopAdvertising(advertiseCallback)
@@ -218,21 +215,6 @@ class MainActivity : ComponentActivity() {
         gattServer = null
         log("gattServer closed")
         setStatus("gattServer closed")
-    }
-
-    private fun sendCharacteristicChangedIndicator(
-        value: Int,
-        characteristic: BluetoothGattCharacteristic?,
-        devices: Set<BluetoothDevice>
-    ) {
-        val data = value.toByteArray()
-        log("sending indication for new value: $data")
-        for (device in devices) {
-            log("sending indication to ${device.address}")
-            characteristic?.let {
-                gattServer?.notifyCharacteristicChanged(device, it, true, data)
-            }
-        }
     }
 
     //handle all the gatt server interactions
@@ -361,7 +343,10 @@ class MainActivity : ComponentActivity() {
             log("Descriptor Write. offset: $offset. uuid: ${descriptor.uuid}")
             when (descriptor.uuid) {
                 UUID.fromString(LEFT_TRACK_DESCRIPTOR_UUID) -> {
-                    if (Arrays.equals(value, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)) {
+                    if (Arrays.equals(
+                            value,
+                            BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                    )) {
                         leftTrackSubscribedDevices.add(device)
                         log("Descriptor Write. added left subscriber")
                     } else if (Arrays.equals(
@@ -384,7 +369,10 @@ class MainActivity : ComponentActivity() {
                 }
 
                 UUID.fromString(RIGHT_TRACK_DESCRIPTOR_UUID) -> {
-                    if (Arrays.equals(value, BluetoothGattDescriptor.ENABLE_INDICATION_VALUE)) {
+                    if (Arrays.equals(
+                            value,
+                            BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
+                    )) {
                         rightTrackSubscribedDevices.add(device)
                         log("Descriptor Write. added right subscriber")
                     } else if (Arrays.equals(
@@ -436,7 +424,11 @@ class MainActivity : ComponentActivity() {
             val oldValue = field
             field = value
             if (oldValue != value) {
-                sendCharacteristicChangedIndicator(value, leftTrackChar, leftTrackSubscribedDevices)
+                sendCharacteristicChangedIndicator(
+                    value,
+                    leftTrackChar,
+                    leftTrackSubscribedDevices
+                )
             }
         }
     var rightPower: Int = 0
@@ -455,6 +447,21 @@ class MainActivity : ComponentActivity() {
     fun setTracks(l: Int, r: Int) {
         leftPower = l
         rightPower = r
+    }
+
+    private fun sendCharacteristicChangedIndicator(
+        value: Int,
+        characteristic: BluetoothGattCharacteristic?,
+        devices: Set<BluetoothDevice>
+    ) {
+        val data = value.toByteArray()
+        log("sending indication for new value: $data")
+        for (device in devices) {
+            log("sending indication to ${device.address}")
+            characteristic?.let {
+                gattServer?.notifyCharacteristicChanged(device, it, true, data)
+            }
+        }
     }
 }
 
